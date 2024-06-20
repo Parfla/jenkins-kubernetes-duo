@@ -1,22 +1,40 @@
 pipeline {
     agent any
     environment {
-        leenewcredentials = credentials('leenewcredentials')
+        OLD_VERSION = "v1"
+        VERSION = "v2"
+        jenkinscredentials = credentials('jenkinscredentials')
     }
     stages {
-        stage('Deploy App') {
+        stage('Build Images') {
             steps {
-                sh "kubectl apply -f flask-app.yaml"
-                sh "sleep 30"
-                sh "kubectl get svc flask-app"
+                sh "docker build -t ${jenkinscredentials_USR}/task1-flask-app:${VERSION} Task1"
+                sh "docker build -t ${jenkinscredentials_USR}/task1-nginx:${VERSION} -f Task1/Dockerfile.nginx Task1"
             }
         }
-        stage('Deploy NGINX') {
+        stage('Deploy Containers') {
             steps {
-                sh "kubectl apply -f nginx.yaml"
-                sh "sleep 30"
-                sh "kubectl get svc nginx"
+                sh "docker network create task1-net || true"
+                sh "docker rm -f \$(docker ps -aq) || true"
+                sh "docker run -d --network task1-net --name flask-app -e YOUR_NAME=Jenkins ${jenkinscredentials_USR}/task1-flask-app:${VERSION}"
+                sh "docker run -d -p 80:80 --name nginx --network task1-net ${jenkinscredentials_USR}/task1-nginx:${VERSION}"
             }
+        }
+        stage('Push to DockerHub') {
+            steps {
+                sh "docker login -u ${jenkinscredentials_USR} -p ${jenkinscredentials_PSW}"
+                sh "docker push ${jenkinscredentials_USR}/task1-flask-app:${VERSION}"
+                sh "docker push ${jenkinscredentials_USR}/task1-nginx:${VERSION}"
+                sh "docker logout"
+            }
+        }
+    }
+    post {
+        always {
+            cleanWs()
+            sh "docker rmi ${jenkinscredentials_USR}/task1-flask-app:${OLD_VERSION} || true"
+            sh "docker rmi ${jenkinscredentials_USR}/task1-nginx:${OLD_VERSION} || true"
+
         }
     }
 }
