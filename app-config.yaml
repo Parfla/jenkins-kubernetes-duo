@@ -3,4 +3,4 @@ kind: ConfigMap
 metadata:
   name: app-cm
 data:
-  YOUR_NAME: BlahBlahBlah
+  YOUR_NAME: Lee
